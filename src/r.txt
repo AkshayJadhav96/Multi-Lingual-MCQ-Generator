@@ -1,0 +1,123 @@
+Extracted answer for 'An ideal student is good in education, an additional course participates in activities, behaves well and looks beautiful and luxurious.': ideal student
+Extracted answer for 'Every person wants to be like him and every person wants to be his friend.': every person
+Extracted answer for 'Teachers also like such students and they are appreciated wherever they go.': teachers also
+Extracted answer for 'Everyone wants to sit or make friends with such students, so many people don't pray good for them because they're jealous of them.': such students
+Extracted answer for 'However, it doesn't matter to the ideal student's mind because he achieves high things in life from his personality.': ideal student
+Extracted answer for 'The ideal student is not a person who is the best and gets full points in each exam or every sport in which he takes part, and he's the winner, and he's the winner, and he's the winner, and he's the winner, and he's the winner, and he's the winner.': ideal student
+Extracted answers: ['ideal student', 'every person', 'teachers also', 'such students', 'ideal student', 'ideal student']
+Generated question: What is good in education?
+{
+  "question": "शिक्षा में क्या अच्छा है?",
+  "options": [
+    "शिक्षा",
+    "छात्रों",
+    "छात्र",
+    "आदर्श छात्र"
+  ],
+  "correct_answer": "आदर्श छात्र"
+}
+Generated question: What person wants to be like him?
+{
+  "question": "वह किस तरह के व्यक्ति बनना चाहता है?",
+  "options": [
+    "लोग",
+    "हर",
+    "हर",
+    "हर व्यक्ति"
+  ],
+  "correct_answer": "हर व्यक्ति"
+}
+Generated question: How many students are appreciated wherever they go?
+{
+  "question": "कितने छात्रों को सराहना की जाती है जहां भी वे जाते हैं?",
+  "options": [
+    "शिक्षकों को भी",
+    "शिक्षा",
+    "छात्रों",
+    "छात्र"
+  ],
+  "correct_answer": "शिक्षकों को भी"
+}
+Generated question: How many people want to sit or make friends?
+{
+  "question": "कितने लोग बैठना चाहते हैं या दोस्त बनाना चाहते हैं?",
+  "options": [
+    "ऐसे छात्र",
+    "छात्र",
+    "शिक्षा",
+    "छात्रों"
+  ],
+  "correct_answer": "ऐसे छात्र"
+}
+Generated question: What does the mind doesn't matter to?
+{
+  "question": "मन में क्या मायने नहीं रखता?",
+  "options": [
+    "आदर्श छात्र",
+    "छात्र",
+    "छात्रों",
+    "शिक्षा"
+  ],
+  "correct_answer": "आदर्श छात्र"
+}
+Generated question: What is a person who is the best and gets full points in each exam or every sport?
+{
+  "question": "कौन सा व्यक्ति सबसे अच्छा है और हर परीक्षा या हर खेल में पूर्ण अंक प्राप्त करता है?",
+  "options": [
+    "छात्र",
+    "आदर्श छात्र",
+    "शिक्षा",
+    "छात्रों"
+  ],
+  "correct_answer": "आदर्श छात्र"
+}
+Evaluation Metrics: {
+  "BLEU": 0.0,
+  "METEOR": 0.0,
+  "ROUGE-L": 0.0
+}
+Generated 6 MCQs for Hindi
+Generating MCQ for text: Apache Hadoop software is an open source framework that allows for the distributed storage and processing of large datasets across clusters of computers using simple programming models. Hadoop is designed to scale up from a single computer to thousands of clustered computers, with each machine offering local computation and storage. In this way, Hadoop can efficiently store and process large datasets ranging in size from gigabytes to petabytes of data.
+Extracted answer for 'Apache Hadoop software is an open source framework that allows for the distributed storage and processing of large datasets across clusters of computers using simple programming models.': Apache Hadoop
+Extracted answer for 'Hadoop is designed to scale up from a single computer to thousands of clustered computers, with each machine offering local computation and storage.': Hadoop
+Extracted answer for 'In this way, Hadoop can efficiently store and process large datasets ranging in size from gigabytes to petabytes of data.': Hadoop
+Extracted answers: ['Apache Hadoop', 'Hadoop', 'Hadoop']
+Generated question: What is an open source framework that allows for distributed storage and processing of large datasets across clusters of computers?
+{
+  "question": "What is an open source framework that allows for distributed storage and processing of large datasets across clusters of computers?",
+  "options": [
+    "machine",
+    "Apache Hadoop",
+    "computers",
+    "Hadoop"
+  ],
+  "correct_answer": "Apache Hadoop"
+}
+Generated question: What is designed to scale up from a single computer to thousands of clustered computers?
+{
+  "question": "What is designed to scale up from a single computer to thousands of clustered computers?",
+  "options": [
+    "with",
+    "the",
+    "Hadoop",
+    "and"
+  ],
+  "correct_answer": "Hadoop"
+}
+Generated question: What can efficiently store and process large datasets ranging in size from gigabytes to petabytes?
+{
+  "question": "What can efficiently store and process large datasets ranging in size from gigabytes to petabytes?",
+  "options": [
+    "with",
+    "the",
+    "Hadoop",
+    "and"
+  ],
+  "correct_answer": "Hadoop"
+}
+Evaluation Metrics: {
+  "BLEU": 0.15888719189683156,
+  "METEOR": 0.5133472638451585,
+  "ROUGE-L": 0.47646176911544225
+}
+Generated 3 MCQs for English
