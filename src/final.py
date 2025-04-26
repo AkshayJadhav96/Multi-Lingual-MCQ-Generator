@@ -39,18 +39,7 @@ DOMAIN_DISTRACTORS = {
 }
 
 # Reference questions for evaluation
-REFERENCE_QUESTIONS = {
-    'hi': [
-        "शिक्षा में अच्छा कौन होता है?",
-        "उसका दोस्त कौन होना चाहता है?",
-        "आदर्श छात्र का मुख्य गुण क्या है?"
-    ],
-    'en': [
-        "What is an open source framework for distributed storage?",
-        "What is Hadoop designed to scale up to?",
-        "What does Hadoop process efficiently?"
-    ]
-}
+
 
 def load_embeddings(file_path, vocab_size=10000):
     embeddings = {}
@@ -78,11 +67,9 @@ def extract_answers(context, tokenizer, model, lstm, word2idx, device, lang='en'
     answers = []
 
     for sent in sents:
-        # Use KeyBERT with preference for short phrases
         keywords = kw_model.extract_keywords(sent, keyphrase_ngram_range=(1, 2), stop_words=None, top_n=1)
         answer = keywords[0][0] if keywords else None
 
-        # Use SpaCy for NER and POS (English only, if available)
         if lang == 'en' and nlp:
             doc = nlp(sent)
             entities = [ent.text for ent in doc.ents if ent.label_ in ["PERSON", "ORG", "GPE", "PRODUCT"]]
@@ -94,14 +81,11 @@ def extract_answers(context, tokenizer, model, lstm, word2idx, device, lang='en'
                         answer = token.text
                         break
 
-        # Fallback for Hindi or if no answer found
         if not answer:
             tokens = word_tokenize(sent)
             if tokens:
-                # Prioritize compound nouns or significant terms
                 for i, token in enumerate(tokens):
                     if token not in ["के", "में", "से", "है", "और"] and len(token) > 2:
-                        # Check for compound nouns (e.g., "आदर्श छात्र")
                         if i + 1 < len(tokens) and tokens[i + 1] in ["छात्र", "विद्यार्थी", "person"]:
                             answer = f"{token} {tokens[i + 1]}"
                             break
@@ -110,7 +94,6 @@ def extract_answers(context, tokenizer, model, lstm, word2idx, device, lang='en'
                 else:
                     answer = tokens[0]
 
-        # Ensure answer is concise (1-2 words)
         answer = " ".join(answer.split()[:2])
         if not answer:
             answer = "unknown"
@@ -125,13 +108,11 @@ def generate_distractors(answer, context, question, lang):
     encoder = SentenceTransformer('paraphrase-multilingual-MiniLM-L12-v2')
     distractors = []
 
-    # Try domain-specific distractors first
     for domain, terms in DOMAIN_DISTRACTORS[lang].items():
         if answer.lower() in domain.lower() or domain.lower() in answer.lower():
             distractors = [term for term in terms if term.lower() != answer.lower()]
             break
 
-    # If not enough distractors, use FastText for Hindi or semantic similarity for English
     if len(distractors) < 3:
         if lang == 'hi':
             try:
@@ -147,13 +128,12 @@ def generate_distractors(answer, context, question, lang):
                 candidate_embeddings = encoder.encode(candidate_phrases, convert_to_tensor=True)
                 similarities = torch.cosine_similarity(answer_embedding, candidate_embeddings, dim=-1)
                 sorted_indices = torch.argsort(similarities, descending=True)
-                selected_indices = sorted_indices[1:7]  # Get more candidates to have variety
+                selected_indices = sorted_indices[1:7]
                 for idx in selected_indices:
                     distractor = candidate_phrases[idx]
                     if distractor not in distractors and len(distractors) < 3:
                         distractors.append(distractor)
 
-    # Fallback: Use generic terms
     if len(distractors) < 3:
         fallback = {
             'en': ['option1', 'option2', 'option3'],
@@ -169,25 +149,17 @@ def evaluate_questions(generated_questions, reference_questions, lang):
     rouge_scores = []
     scorer = rouge_scorer.RougeScorer(['rougeL'], use_stemmer=True)
     
-    # Use available reference questions
     reference_to_use = reference_questions[:min(len(reference_questions), len(generated_questions))]
-    
-    # If not enough reference questions, repeat the last one
     while len(reference_to_use) < len(generated_questions):
         reference_to_use.append(reference_questions[-1])
 
     for gen_q, ref_q in zip(generated_questions, reference_to_use):
-        # BLEU with smoothing
         from nltk.translate.bleu_score import SmoothingFunction
         smooth = SmoothingFunction().method1
         bleu = sentence_bleu([ref_q.split()], gen_q.split(), smoothing_function=smooth)
         bleu_scores.append(bleu)
-        
-        # METEOR
         meteor = meteor_score([ref_q.split()], gen_q.split())
         meteor_scores.append(meteor)
-        
-        # ROUGE-L
         rouge = scorer.score(ref_q, gen_q)
         rouge_scores.append(rouge['rougeL'].fmeasure)
 
@@ -201,36 +173,38 @@ def generate_mcq(text, lang='en', translate=False):
     print(f"Generating MCQ for text: {text}", flush=True)
     
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    original_lang = lang
 
+    # Translation setup for Hindi
+    hi_en_model, hi_en_tokenizer, en_hi_model, en_hi_tokenizer = None, None, None, None
     if translate and lang == 'hi':
         hi_en_model_name = "facebook/m2m100_418M"
         en_hi_model_name = "facebook/m2m100_418M"
         
-        # Configure Hindi to English translation properly
         hi_en_tokenizer = M2M100Tokenizer.from_pretrained(hi_en_model_name)
         hi_en_tokenizer.src_lang = "hi"
-        hi_en_tokenizer.tgt_lang = "en"  # IMPORTANT: Explicitly set target language
+        hi_en_tokenizer.tgt_lang = "en"
         hi_en_model = M2M100ForConditionalGeneration.from_pretrained(hi_en_model_name).to(device)
         
-        # Configure English to Hindi translation properly
         en_hi_tokenizer = M2M100Tokenizer.from_pretrained(en_hi_model_name)
         en_hi_tokenizer.src_lang = "en"
-        en_hi_tokenizer.tgt_lang = "hi"  # IMPORTANT: Explicitly set target language
+        en_hi_tokenizer.tgt_lang = "hi"
         en_hi_model = M2M100ForConditionalGeneration.from_pretrained(en_hi_model_name).to(device)
 
-        # Translate Hindi to English with forced language token
+        # Translate Hindi context to English
         inputs = hi_en_tokenizer(text, return_tensors="pt", truncation=True, padding=True, max_length=512).to(device)
         translated_ids = hi_en_model.generate(
             **inputs, 
             max_length=512, 
             num_beams=4,
-            forced_bos_token_id=hi_en_tokenizer.get_lang_id("en")  # Force English output
+            forced_bos_token_id=hi_en_tokenizer.get_lang_id("en")
         )
         english_text = hi_en_tokenizer.decode(translated_ids[0], skip_special_tokens=True)
         print(f"Translated Hindi to English: {english_text}", flush=True)
         text = english_text
         lang = 'en'
 
+    # Load embeddings and models
     embedding_file = os.path.join(DATA_DIR, 'embeddings/glove.6B.300d.txt') if lang == 'en' else os.path.join(DATA_DIR, 'embeddings/cc.hi.300.vec')
     embeddings, word2idx = load_embeddings(embedding_file)
     embedding_matrix = torch.stack([embeddings.get(word, torch.zeros(300)) for word in embeddings.keys()])
@@ -246,7 +220,25 @@ def generate_mcq(text, lang='en', translate=False):
     model = AutoModelForSeq2SeqLM.from_pretrained(transformer_path)
     model.to(device)
 
+    # Extract sentences and answers
     sents, answers = extract_answers(text, tokenizer, model, lstm, word2idx, device, lang)
+    
+    # Translate answers to English for Hindi pipeline
+    if translate and original_lang == 'hi':
+        translated_answers = []
+        for answer in answers:
+            inputs = hi_en_tokenizer(answer, return_tensors="pt", truncation=True, padding=True, max_length=512).to(device)
+            translated_ids = hi_en_model.generate(
+                **inputs, 
+                max_length=512, 
+                num_beams=4,
+                forced_bos_token_id=hi_en_tokenizer.get_lang_id("en")
+            )
+            translated_answer = hi_en_tokenizer.decode(translated_ids[0], skip_special_tokens=True)
+            print(f"Translated answer '{answer}' to English: {translated_answer}", flush=True)
+            translated_answers.append(translated_answer)
+        answers = translated_answers
+
     mcqs = []
     generated_questions = []
 
@@ -270,92 +262,90 @@ def generate_mcq(text, lang='en', translate=False):
             lstm_mean = lstm_mean.tolist() if torch.is_tensor(lstm_mean) else [lstm_mean] * 256
             lstm_str = " ".join([f"{x:.4f}" for x in lstm_mean[:10]])
 
-            prompt = "generate clear and concise question: " if lang == 'en' else "स्पष्ट और संक्षिप्त प्रश्न उत्पन्न करें: "
+            prompt = "generate clear and concise question: "
             input_text = f"{prompt}{sent} answer: {answer} [LSTM: {lstm_str}]"
             inputs = tokenizer(input_text, return_tensors="pt", truncation=True, padding="max_length", max_length=512).to(device)
             question_ids = model.generate(**inputs, max_length=32, num_beams=4, length_penalty=0.8)
             question = tokenizer.decode(question_ids[0], skip_special_tokens=True)
-            print(f"Generated question: {question}", flush=True)
+            # print(f"Generated question: {question}", flush=True)
 
-            distractors = generate_distractors(answer, text, question, lang)
+            # Generate distractors in English
+            distractors = generate_distractors(answer, text, question, lang='en')
+
+            # Translate question, answer, and distractors back to Hindi if needed
+            if translate and original_lang == 'hi':
+                try:
+                    # Translate question
+                    inputs = en_hi_tokenizer(question, return_tensors="pt", truncation=True, padding=True, max_length=512).to(device)
+                    translated_ids = en_hi_model.generate(
+                        **inputs, 
+                        max_length=512, 
+                        num_beams=4,
+                        forced_bos_token_id=en_hi_tokenizer.get_lang_id("hi")
+                    )
+                    question = en_hi_tokenizer.decode(translated_ids[0], skip_special_tokens=True)
+
+                    # Translate answer
+                    inputs = en_hi_tokenizer(answer, return_tensors="pt", truncation=True, padding=True, max_length=512).to(device)
+                    translated_ids = en_hi_model.generate(
+                        **inputs, 
+                        max_length=512, 
+                        num_beams=4,
+                        forced_bos_token_id=en_hi_tokenizer.get_lang_id("hi")
+                    )
+                    answer = en_hi_tokenizer.decode(translated_ids[0], skip_special_tokens=True)
+
+                    # Translate distractors
+                    translated_distractors = []
+                    for distractor in distractors:
+                        inputs = en_hi_tokenizer(distractor, return_tensors="pt", truncation=True, padding=True, max_length=512).to(device)
+                        translated_ids = en_hi_model.generate(
+                            **inputs, 
+                            max_length=512, 
+                            num_beams=4,
+                            forced_bos_token_id=en_hi_tokenizer.get_lang_id("hi")
+                        )
+                        translated_distractors.append(en_hi_tokenizer.decode(translated_ids[0], skip_special_tokens=True))
+                    distractors = translated_distractors
+                except Exception as e:
+                    print(f"Translation error: {e}", flush=True)
+
             options = [answer] + distractors
             random.shuffle(options)
+
+            # Clean up Hindi question markers
+            if translate and original_lang == 'hi':
+                question = question.replace(" क्या है? क्या है?", " क्या है?")
+                question = question.replace(" कितने हैं? कितने हैं?", " कितने हैं?")
+                question = question.replace(" कौन है? कौन है?", " कौन है?")
+                if "?" not in question:
+                    if "कौन" in question or "who" in question.lower():
+                        question += " कौन है?"
+                    elif "कितने" in question or "how many" in question.lower():
+                        question += " कितने हैं?"
+                    else:
+                        question += " क्या है?"
 
             mcq = {
                 "question": question,
                 "options": options,
                 "correct_answer": answer
             }
-
-            # Translation back to Hindi if needed
-            if translate and lang == 'en':
-                try:
-                    # Translate the question
-                    inputs = en_hi_tokenizer(mcq["question"], return_tensors="pt", truncation=True, padding=True, max_length=512).to(device)
-                    translated_ids = en_hi_model.generate(
-                        **inputs, 
-                        max_length=512, 
-                        num_beams=4,
-                        forced_bos_token_id=en_hi_tokenizer.get_lang_id("hi")  # Force Hindi output
-                    )
-                    mcq["question"] = en_hi_tokenizer.decode(translated_ids[0], skip_special_tokens=True)
-
-                    # Translate the options
-                    translated_options = []
-                    for opt in mcq["options"]:
-                        inputs = en_hi_tokenizer(opt, return_tensors="pt", truncation=True)  # Fixed syntax error here
-                        translated_ids = en_hi_model.generate(
-                            **inputs, 
-                            max_length=512, 
-                            num_beams=4,
-                            forced_bos_token_id=en_hi_tokenizer.get_lang_id("hi")  # Force Hindi output
-                        )
-                        translated_options.append(en_hi_tokenizer.decode(translated_ids[0], skip_special_tokens=True))
-                    mcq["options"] = translated_options
-
-                    # Translate the correct answer
-                    inputs = en_hi_tokenizer(mcq["correct_answer"], return_tensors="pt", truncation=True, padding=True, max_length=512).to(device)
-                    translated_ids = en_hi_model.generate(
-                        **inputs, 
-                        max_length=512, 
-                        num_beams=4,
-                        forced_bos_token_id=en_hi_tokenizer.get_lang_id("hi")  # Force Hindi output
-                    )
-                    mcq["correct_answer"] = en_hi_tokenizer.decode(translated_ids[0], skip_special_tokens=True)
-                except Exception as e:
-                    print(f"Translation error: {e}", flush=True)
-
-            # Clean up Hindi question markers if needed
-            if lang == 'en' and translate:
-                # First remove any duplicated question markers
-                mcq["question"] = mcq["question"].replace(" क्या है? क्या है?", " क्या है?")
-                mcq["question"] = mcq["question"].replace(" कितने हैं? कितने हैं?", " कितने हैं?")
-                mcq["question"] = mcq["question"].replace(" कौन है? कौन है?", " कौन है?")
-                
-                # Only add question marker if the question doesn't already have one
-                if "?" not in mcq["question"]:
-                    if "कौन" in mcq["question"] or "who" in question.lower():
-                        mcq["question"] += " कौन है?"
-                    elif "कितने" in mcq["question"] or "how many" in question.lower():
-                        mcq["question"] += " कितने हैं?"
-                    else:
-                        mcq["question"] += " क्या है?"
-
             mcqs.append(mcq)
             generated_questions.append(mcq["question"])
             print(json.dumps(mcq, indent=2, ensure_ascii=False), flush=True)
 
     # Evaluate generated questions
-    eval_metrics = evaluate_questions(generated_questions, REFERENCE_QUESTIONS[lang], lang)
-    print(f"Evaluation Metrics: {json.dumps(eval_metrics, indent=2)}", flush=True)
+    # eval_metrics = evaluate_questions(generated_questions, REFERENCE_QUESTIONS[original_lang], original_lang)
+    # print(f"Evaluation Metrics: {json.dumps(eval_metrics, indent=2)}", flush=True)
 
     return mcqs
 
 if __name__ == "__main__":
-    hindi_text = """एक आदर्श छात्र शिक्षा में अच्छा होता है, अतिरिक्त पाठ्यक्रम गतिविधियों में भाग लेता है, अच्छा व्यवहार करता है और सुंदर एवं सुशील दिखता है। हर व्यक्ति उसकी तरह बनना चाहता है और हर व्यक्ति उसका दोस्त बनना चाहता है। शिक्षक भी ऐसे छात्रों को पसंद करते हैं और वे जहां भी जाते हैं उनकी सराहना की जाती है। सभी इस तरह के छात्र के साथ बैठना या मित्रता करना चाहते हैं, तो कई लोग उनके लिए अच्छे की दुआ नहीं करते क्योंकि वे उनसे ईर्ष्या करते हैं। फिर भी इससे आदर्श छात्र के मन को कोई फर्क नहीं पड़ता क्योंकि वह अपने व्यक्तित्व से जीवन में उच्च चीजें हासिल करता है। आदर्श छात्र कोई ऐसा व्यक्ति नहीं है जो उत्तम है और प्रत्येक परीक्षा में पूर्ण अंक प्राप्त करता है या प्रत्येक खेल गतिविधियों, जिसमें वह भाग लेता है, और पदक जीतता है। आदर्श छात्र वह है जो अनुशासित रहता है और जीवन में एक सकारात्मक दृष्टि रखता है।"""
+    hindi_text = """पर्यावरण संरक्षण आज के समय में एक महत्वपूर्ण मुद्दा है। पेड़-पौधे और जंगल हमारे ग्रह के लिए ऑक्सीजन का मुख्य स्रोत हैं। नदियाँ और झीलें स्वच्छ जल प्रदान करती हैं, जो जीवन के लिए आवश्यक है। लेकिन प्रदूषण, जैसे कि प्लास्टिक कचरा और औद्योगिक अपशिष्ट, हमारे पर्यावरण को नुकसान पहुँचाता है। भारत में, गंगा नदी को स्वच्छ करने के लिए कई अभियान चलाए गए हैं, जैसे कि 'नमामि गंगे'। हर व्यक्ति को पुनर्चक्रण और ऊर्जा संरक्षण जैसे कदम उठाकर पर्यावरण की रक्षा में योगदान देना चाहिए।"""
     mcqs_hi = generate_mcq(hindi_text, lang='hi', translate=True)
     print(f"Generated {len(mcqs_hi)} MCQs for Hindi", flush=True)
 
-    english_text = """Apache Hadoop software is an open source framework that allows for the distributed storage and processing of large datasets across clusters of computers using simple programming models. Hadoop is designed to scale up from a single computer to thousands of clustered computers, with each machine offering local computation and storage. In this way, Hadoop can efficiently store and process large datasets ranging in size from gigabytes to petabytes of data."""
+    english_text = """Machine learning, a subset of artificial intelligence, enables computers to learn from data without explicit programming. Supervised learning, one of its core branches, involves training models on labeled datasets, such as predicting house prices using features like size and location. Popular algorithms include linear regression, decision trees, and neural networks, with neural networks powering advanced applications like image recognition. The Python library scikit-learn provides tools for implementing these algorithms, while TensorFlow and PyTorch are widely used for deep learning. Overfitting, a common challenge, occurs when a model learns noise instead of patterns, but techniques like cross-validation and regularization help mitigate it."""
     mcqs_en = generate_mcq(english_text, lang='en', translate=False)
     print(f"Generated {len(mcqs_en)} MCQs for English", flush=True)
